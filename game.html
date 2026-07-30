@@ -180,7 +180,7 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
-        // Рисуем красивую скругленную змейку с глазками на голове
+        
         function drawSnake() {
             const palette = skinColors[currentSkin] || skinColors['classic'];
             snake.forEach((part, index) => {
@@ -189,12 +189,12 @@
                 let y = part.y * gridSize;
                 let size = gridSize - 2;
 
-                // Скругленный прямоугольник для тела
+                
                 ctx.beginPath();
                 ctx.roundRect(x + 1, y + 1, size, size, 5);
                 ctx.fill();
 
-                // Рисуем глазки на голове змейки
+                
                 if (index === 0) {
                     ctx.fillStyle = "#000000";
                     let e1x = x + size / 2, e1y = y + size / 2;
@@ -237,19 +237,19 @@
             }
         }
 
-        // Красное яблоко
+        
         function drawFood() {
             let x = food.x * gridSize + gridSize / 2;
             let y = food.y * gridSize + gridSize / 2;
             let radius = gridSize / 2 - 2;
 
-            // Тело яблока
+            
             ctx.fillStyle = "#FF3B30";
             ctx.beginPath();
             ctx.arc(x, y + 1, radius, 0, Math.PI * 2);
             ctx.fill();
 
-            // Хвостик
+            
             ctx.strokeStyle = "#8B5A2B";
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -257,33 +257,33 @@
             ctx.quadraticCurveTo(x + 2, y - radius - 2, x + 4, y - radius - 4);
             ctx.stroke();
 
-            // Листик
+            
             ctx.fillStyle = "#4CD964";
             ctx.beginPath();
             ctx.ellipse(x + 3, y - radius - 2, 3, 1.5, Math.PI / 4, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // Фиолетовое бонусное яблоко с подсветкой
+        
         function drawSuperFood() {
             if (!superFood) return;
             let x = superFood.x * gridSize + gridSize / 2;
             let y = superFood.y * gridSize + gridSize / 2;
             let radius = gridSize / 2 - 2;
 
-            // Неоновое свечение
+            
             ctx.shadowColor = "#AF52DE";
             ctx.shadowBlur = 10;
 
-            // Тело фиолетового яблока
+            
             ctx.fillStyle = "#AF52DE";
             ctx.beginPath();
             ctx.arc(x, y + 1, radius, 0, Math.PI * 2);
             ctx.fill();
 
-            ctx.shadowBlur = 0; // Сбрасываем тень
+            ctx.shadowBlur = 0; 
 
-            // Хвостик
+            
             ctx.strokeStyle = "#8B5A2B";
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -298,30 +298,30 @@
             ctx.fill();
         }
 
-        // Бомба с фитилем и искрой
+        
         function drawBombs() {
             bombs.forEach(b => {
                 let x = b.x * gridSize + gridSize / 2;
                 let y = b.y * gridSize + gridSize / 2;
                 let radius = gridSize / 2 - 2;
 
-                // Основной шар бомбы
+                
                 ctx.fillStyle = "#222222";
                 ctx.beginPath();
                 ctx.arc(x, y + 2, radius - 1, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Блик на бомбе
+                
                 ctx.fillStyle = "#555555";
                 ctx.beginPath();
                 ctx.arc(x - 2, y, 2, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Металлический колпачок сверху
+                
                 ctx.fillStyle = "#888888";
                 ctx.fillRect(x - 3, y - radius + 1, 6, 3);
 
-                // Фитиль
+                
                 ctx.strokeStyle = "#FF9500";
                 ctx.lineWidth = 1.5;
                 ctx.beginPath();
@@ -329,7 +329,7 @@
                 ctx.quadraticCurveTo(x + 4, y - radius - 4, x + 6, y - radius - 6);
                 ctx.stroke();
 
-                // Искра на конце фитиля
+                
                 ctx.fillStyle = "#FFCC00";
                 ctx.beginPath();
                 ctx.arc(x + 6, y - radius - 6, 2.5, 0, Math.PI * 2);
