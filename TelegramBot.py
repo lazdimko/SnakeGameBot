@@ -13,10 +13,10 @@ from aiogram.types import (
     InlineKeyboardMarkup, InlineKeyboardButton
 )
 
-# Токен берется из защищенных переменных окружения хостинга
+
 TG_TOKEN = os.getenv("TG_TOKEN")
 DB_NAME = "snake_game.db"
-WEBAPP_URL = "https://snake-mini-app-zjrw.vercel.app/" # Убедись, что здесь твой актуальный URL Vercel
+WEBAPP_URL = "https://snake-mini-app-zjrw.vercel.app/" 
 
 bot = Bot(token=TG_TOKEN)
 dp = Dispatcher()
@@ -29,8 +29,8 @@ SKINS_CONFIG = {
     "diamond": {"name": "💎 Diamond", "req": 100},
 }
 
-# Список запрещенных слов/корней (фильтр нежелательных ников)
-BANNED_WORDS = ["admin", "moder", "support", "owner", "хуй", "блять", "пидор", "ебать", "сука", "нах"]
+
+BANNED_WORDS = ["admin", "moder", "support", "owner"]
 
 async def init_db():
     async with aiosqlite.connect(DB_NAME) as db:
@@ -244,17 +244,17 @@ async def cmd_nick(message: types.Message, command: CommandObject):
 
     new_nick = command.args.strip()
 
-    # 1. Проверка длины
+    
     if len(new_nick) < 3 or len(new_nick) > 15:
         await message.answer("❌ Nickname must be between 3 and 15 characters long.")
         return
 
-    # 2. Проверка символов
+   
     if not re.match(r"^[a-zA-Zа-яА-Я0-9_\-]+$", new_nick):
         await message.answer("❌ Nickname can only contain letters, numbers, underscores, and hyphens.")
         return
 
-    # 3. Фильтр мата и оскорблений
+    
     nick_lower = new_nick.lower()
     for bad_word in BANNED_WORDS:
         if bad_word in nick_lower:
@@ -264,7 +264,7 @@ async def cmd_nick(message: types.Message, command: CommandObject):
     user_id = message.from_user.id
 
     async with aiosqlite.connect(DB_NAME) as db:
-        # 4. Проверка уникальности никнейма (без учета регистра)
+        
         async with db.execute("SELECT user_id FROM users WHERE LOWER(nickname) = LOWER(?)", (new_nick,)) as cursor:
             existing_user = await cursor.fetchone()
             if existing_user and existing_user[0] != user_id:
