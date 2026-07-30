@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Snake Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            touch-action: none;
+        }
+        #score-board {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #4CAF50;
+        }
+        
+        #skinNotification {
+            height: 24px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #FFD700;
+            text-align: center;
+            margin-bottom: 6px;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        canvas {
+            border: 2px solid #4CAF50;
+            background-color: #000000;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+            touch-action: none;
+        }
+        #controls-hint {
+            margin-top: 14px;
+            font-size: 13px;
+            color: #888;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="score-board">Score: <span id="score">0</span></div>
+    <div id="skinNotification"></div>
+    <canvas id="gameCanvas" width="320" height="320"></canvas>
+    <div id="controls-hint">🍎 Apple (+1) | 🍇 Bonus (+2..+5) | 💣 Bomb</div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentSkin = urlParams.get('skin') || 'classic';
+        const initialBestScore = parseInt(urlParams.get('best') || '0', 10);
+
+        const skinColors = {
+            'classic': { head: '#81C784', body: '#4CAF50' },
+            'fire':    { head: '#FFB74D', body: '#F44336' },
+            'neon':    { head: '#EA80FC', body: '#00E5FF' },
+            'gold':    { head: '#FFF59D', body: '#FFD700' },
+            'diamond': { head: '#F8BBD0', body: '#FF007F' }
+        };
+
+        const skinThresholds = [
+            { name: "🔥 Fire", req: 10 },
+            { name: "⚡ Neon", req: 20 },
+            { name: "👑 Gold", req: 50 },
+            { name: "💎 Diamond", req: 100 }
+        ];
+
+        let unlockedSessionSkins = new Set();
+        skinThresholds.forEach(skin => {
+            if (initialBestScore >= skin.req) {
+                unlockedSessionSkins.add(skin.name);
+            }
+        });
+
+        let notificationTimeout = null;
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreElement = document.getElementById("score");
+        const skinNotification = document.getElementById("skinNotification");
+
+        const gridSize = 16;
+        const tileCount = canvas.width / gridSize;
+
+        let snake = [{x: 10, y: 10}];
+        let dx = 1, dy = 0;
+        
+        let food = {x: 5, y: 5};
+        let superFood = null;
+        let bombs = [];
+
+        let score = 0;
+        let gameOver = false;
+
+        function showSkinUnlockedMessage(skinName) {
+            skinNotification.innerText = `🎉 NEW SKIN UNLOCKED: ${skinName}!`;
+            skinNotification.style.opacity = "1";
+
+            if (notificationTimeout) clearTimeout(notificationTimeout);
+            notificationTimeout = setTimeout(() => {
+                skinNotification.style.opacity = "0";
+            }, 3500);
+        }
+
+        function checkSkinUnlocks(currentScore) {
+            skinThresholds.forEach(skin => {
+                if (currentScore >= skin.req && !unlockedSessionSkins.has(skin.name)) {
+                    unlockedSessionSkins.add(skin.name);
+                    showSkinUnlockedMessage(skin.name);
+                }
+            });
+        }
+
+        function getRandomPos() {
+            let x, y, isOccupied;
+            let attempts = 0;
+            do {
+                x = Math.floor(Math.random() * tileCount);
+                y = Math.floor(Math.random() * tileCount);
+                
+                isOccupied = snake.some(p => p.x === x && p.y === y) ||
+                             (food && food.x === x && food.y === y) ||
+                             (superFood && superFood.x === x && superFood.y === y) ||
+                             bombs.some(b => b.x === x && b.y === y);
+                
+                attempts++;
+                if (attempts > 100) break;
+            } while (isOccupied);
+            
+            return {x, y};
+        }
+
+        function generateFood() {
+            food = getRandomPos();
+        }
+
+        function main() {
+            if (gameOver) return;
+            setTimeout(function() {
+                clearCanvas();
+                moveSnake();
+                drawFood();
+                drawSuperFood();
+                drawBombs();
+                drawSnake();
+                checkGameOver();
+                if (!gameOver) main();
+            }, 100);
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = "#000000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Рисуем красивую скругленную змейку с глазками на голове
+        function drawSnake() {
+            const palette = skinColors[currentSkin] || skinColors['classic'];
+            snake.forEach((part, index) => {
+                ctx.fillStyle = index === 0 ? palette.head : palette.body;
+                let x = part.x * gridSize;
+                let y = part.y * gridSize;
+                let size = gridSize - 2;
+
+                // Скругленный прямоугольник для тела
+                ctx.beginPath();
+                ctx.roundRect(x + 1, y + 1, size, size, 5);
+                ctx.fill();
+
+                // Рисуем глазки на голове змейки
+                if (index === 0) {
+                    ctx.fillStyle = "#000000";
+                    let e1x = x + size / 2, e1y = y + size / 2;
+                    let e2x = x + size / 2, e2y = y + size / 2;
+
+                    if (dx === 1) { e1x = x + size - 4; e1y = y + 4; e2x = x + size - 4; e2y = y + size - 4; }
+                    else if (dx === -1) { e1x = x + 4; e1y = y + 4; e2x = x + 4; e2y = y + size - 4; }
+                    else if (dy === 1) { e1x = x + 4; e1y = y + size - 4; e2x = x + size - 4; e2y = y + size - 4; }
+                    else if (dy === -1) { e1x = x + 4; e1y = y + 4; e2x = x + size - 4; e2y = y + 4; }
+
+                    ctx.beginPath();
+                    ctx.arc(e1x, e1y, 2, 0, Math.PI * 2);
+                    ctx.arc(e2x, e2y, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+        }
+
+        function moveSnake() {
+            const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+            snake.unshift(head);
+
+            if (head.x === food.x && head.y === food.y) {
+                score += 1;
+                scoreElement.innerText = score;
+                checkSkinUnlocks(score);
+                generateFood();
+                maybeSpawnBomb();
+                maybeSpawnSuperFood();
+            } 
+            else if (superFood && head.x === superFood.x && head.y === superFood.y) {
+                score += superFood.points;
+                scoreElement.innerText = score;
+                checkSkinUnlocks(score);
+                superFood = null;
+                maybeSpawnBomb();
+            } 
+            else {
+                snake.pop();
+            }
+        }
+
+        // Красное яблоко
+        function drawFood() {
+            let x = food.x * gridSize + gridSize / 2;
+            let y = food.y * gridSize + gridSize / 2;
+            let radius = gridSize / 2 - 2;
+
+            // Тело яблока
+            ctx.fillStyle = "#FF3B30";
+            ctx.beginPath();
+            ctx.arc(x, y + 1, radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Хвостик
+            ctx.strokeStyle = "#8B5A2B";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x, y - radius + 2);
+            ctx.quadraticCurveTo(x + 2, y - radius - 2, x + 4, y - radius - 4);
+            ctx.stroke();
+
+            // Листик
+            ctx.fillStyle = "#4CD964";
+            ctx.beginPath();
+            ctx.ellipse(x + 3, y - radius - 2, 3, 1.5, Math.PI / 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Фиолетовое бонусное яблоко с подсветкой
+        function drawSuperFood() {
+            if (!superFood) return;
+            let x = superFood.x * gridSize + gridSize / 2;
+            let y = superFood.y * gridSize + gridSize / 2;
+            let radius = gridSize / 2 - 2;
+
+            // Неоновое свечение
+            ctx.shadowColor = "#AF52DE";
+            ctx.shadowBlur = 10;
+
+            // Тело фиолетового яблока
+            ctx.fillStyle = "#AF52DE";
+            ctx.beginPath();
+            ctx.arc(x, y + 1, radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.shadowBlur = 0; // Сбрасываем тень
+
+            // Хвостик
+            ctx.strokeStyle = "#8B5A2B";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x, y - radius + 2);
+            ctx.quadraticCurveTo(x + 2, y - radius - 2, x + 4, y - radius - 4);
+            ctx.stroke();
+
+            // Голубой листик
+            ctx.fillStyle = "#5AC8FA";
+            ctx.beginPath();
+            ctx.ellipse(x + 3, y - radius - 2, 3, 1.5, Math.PI / 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Бомба с фитилем и искрой
+        function drawBombs() {
+            bombs.forEach(b => {
+                let x = b.x * gridSize + gridSize / 2;
+                let y = b.y * gridSize + gridSize / 2;
+                let radius = gridSize / 2 - 2;
+
+                // Основной шар бомбы
+                ctx.fillStyle = "#222222";
+                ctx.beginPath();
+                ctx.arc(x, y + 2, radius - 1, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Блик на бомбе
+                ctx.fillStyle = "#555555";
+                ctx.beginPath();
+                ctx.arc(x - 2, y, 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Металлический колпачок сверху
+                ctx.fillStyle = "#888888";
+                ctx.fillRect(x - 3, y - radius + 1, 6, 3);
+
+                // Фитиль
+                ctx.strokeStyle = "#FF9500";
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(x, y - radius + 1);
+                ctx.quadraticCurveTo(x + 4, y - radius - 4, x + 6, y - radius - 6);
+                ctx.stroke();
+
+                // Искра на конце фитиля
+                ctx.fillStyle = "#FFCC00";
+                ctx.beginPath();
+                ctx.arc(x + 6, y - radius - 6, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function maybeSpawnSuperFood() {
+            if (!superFood && Math.random() < 0.3) {
+                const pos = getRandomPos();
+                const randomPoints = Math.floor(Math.random() * 4) + 2; 
+                superFood = { x: pos.x, y: pos.y, points: randomPoints };
+            }
+        }
+
+        function maybeSpawnBomb() {
+            if (score > 3 && bombs.length < 5 && Math.random() < 0.4) {
+                const pos = getRandomPos();
+                bombs.push(pos);
+            }
+        }
+
+        function checkGameOver() {
+            const head = snake[0];
+
+            if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+                endGame("Hit the wall!");
+            }
+
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    endGame("Hit yourself!");
+                }
+            }
+
+            for (let i = 0; i < bombs.length; i++) {
+                if (head.x === bombs[i].x && head.y === bombs[i].y) {
+                    endGame("Boom! Hit a bomb! 💥");
+                }
+            }
+        }
+
+        function endGame(reason) {
+            if (gameOver) return;
+            gameOver = true;
+            tg.sendData(JSON.stringify({ score: score }));
+        }
+
+        document.addEventListener("keydown", function(e) {
+            if (e.key === "ArrowLeft" && dx === 0)  { dx = -1; dy = 0; }
+            if (e.key === "ArrowRight" && dx === 0) { dx = 1;  dy = 0; }
+            if (e.key === "ArrowUp" && dy === 0)    { dx = 0;  dy = -1; }
+            if (e.key === "ArrowDown" && dy === 0)  { dx = 0;  dy = 1; }
+        });
+
+        let touchStartX = 0;
+        let touchStartY = 0;
+        const minSwipeDistance = 20;
+
+        document.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+
+        document.addEventListener('touchstart', function(e) {
+            touchStartX = e.changedTouches[0].clientX;
+            touchStartY = e.changedTouches[0].clientY;
+        }, { passive: false });
+
+        document.addEventListener('touchend', function(e) {
+            if (!touchStartX || !touchStartY) return;
+
+            let diffX = e.changedTouches[0].clientX - touchStartX;
+            let diffY = e.changedTouches[0].clientY - touchStartY;
+
+            if (Math.abs(diffX) > minSwipeDistance || Math.abs(diffY) > minSwipeDistance) {
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    if (diffX > 0 && dx === 0)      { dx = 1;  dy = 0; }
+                    else if (diffX < 0 && dx === 0) { dx = -1; dy = 0; }
+                } else {
+                    if (diffY > 0 && dy === 0)      { dx = 0;  dy = 1; }
+                    else if (diffY < 0 && dy === 0) { dx = 0;  dy = -1; }
+                }
+            }
+            touchStartX = 0;
+            touchStartY = 0;
+        }, { passive: false });
+
+        generateFood();
+        main();
+    </script>
+</body>
+</html>
